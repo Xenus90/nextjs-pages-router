@@ -1,33 +1,51 @@
-import { Fragment } from 'react';
-import { useRouter } from 'next/router';
-import { getFilteredEvents } from '../../dummy-data';
+import { Fragment, useState } from 'react';
+import { Event, getFilteredEvents } from '../../helpers/api-util';
 import EventList from '../../components/events/event-list';
 import ResultsTitle from '../../components/events/results-title';
 import Button from '../../components/ui/button';
 import ErrorAlert from '../../components/ui/error-alert';
+import { GetServerSideProps } from 'next';
+import { useRouter } from 'next/router';
+import useSwr from "swr";
 
 function FilteredEventsPage() {
+  const [events, setEvents] = useState<Event[]>();
   const router = useRouter();
-
   const filterData = router.query.slug;
+  const numYear = +filterData![0];
+  const numMonth = +filterData![1];
 
-  if (!filterData) {
-    return <p className='center'>Loading...</p>;
+  useSwr(
+    "https://next-js-1fc09-default-rtdb.firebaseio.com/events.json",
+    url => fetch(url)
+      .then(response => response.json())
+      .then(data => {
+        const events: Event[] = [];
+        for (const key in data) {
+          events.push({
+            id: key,
+            ...data[key]
+          });
+        }
+        setEvents(events);
+      })
+  );
+
+  if (!events) {
+    return (
+      <p className='center'>
+        Loading...
+      </p>
+    );
   }
 
-  const filteredYear = filterData[0];
-  const filteredMonth = filterData[1];
-
-  const numYear = +filteredYear;
-  const numMonth = +filteredMonth;
-
   if (
-    isNaN(numYear) ||
-    isNaN(numMonth) ||
-    numYear > 2030 ||
-    numYear < 2021 ||
-    numMonth < 1 ||
-    numMonth > 12
+    isNaN(numYear)
+    || isNaN(numMonth)
+    || numYear > 2030
+    || numYear < 2021
+    || numMonth < 1
+    || numMonth > 12
   ) {
     return (
       <Fragment>
@@ -41,12 +59,12 @@ function FilteredEventsPage() {
     );
   }
 
-  const filteredEvents = getFilteredEvents({
-    year: numYear,
-    month: numMonth,
+  const filteredEvents = events.filter(event => {
+    const eventDate = new Date(event.date);
+    return eventDate.getFullYear() === numYear && eventDate.getMonth() === numMonth - 1;
   });
 
-  if (!filteredEvents || filteredEvents.length === 0) {
+  if (!filteredEvents?.length) {
     return (
       <Fragment>
         <ErrorAlert>
@@ -59,11 +77,9 @@ function FilteredEventsPage() {
     );
   }
 
-  const date = new Date(numYear, numMonth - 1);
-
   return (
     <Fragment>
-      <ResultsTitle date={date} />
+      <ResultsTitle date={new Date(numYear, numMonth - 1)} />
       <EventList items={filteredEvents} />
     </Fragment>
   );
